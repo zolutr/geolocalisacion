@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<title>Database with objects</title>
+
+<style>
+	label, input { display: block;}
+	body{
+		background: yellow;
+	}
+</style>
+
+<script>
+// Objeto Persona
+function Persona() {
+	this.nombre = "";
+	this.timestamp = new Date();
+}
+
+// Crea objeto base de datos base
+function BDManager() {
+	this.tipo="indefinido";
+	this.init = function() { };
+	this.cantidadPersonas = function() { return 0 };
+	this.guardarPersona = function(p) {};
+	this.listarTodos = function() {};
+}
+
+/* CREAMOS LOGICA PARA WEBSQL */
+var bdWebSQL = new BDManager();
+bdWebSQL.tipo = "Web SQL";
+bdWebSQL.init = function() { 
+	this.bd = window.openDatabase("personas", 1.0, "BD de Personas", 5*1024*1024, function() {
+		console.log("BD abierta");
+	});
+	this.bd.transaction(function(tx) {
+		// Esto es una transacción
+		tx.executeSql("CREATE TABLE IF NOT EXISTS PERSONAS (NOMBRE, TIMESTAMP)");
+	});
+};
+bdWebSQL.cantidadPersonas = function() {
+	this.bd.transaction(function(tx) {
+		tx.executeSql("SELECT COUNT(*) AS cantidad FROM PERSONAS", [], 
+			function(tx, resultado) {
+				return resultado.rows.item(0).cantidad;
+			});
+	});
+};
+bdWebSQL.guardarPersona = function(p) {
+	this.bd.transaction(function(tx) {
+		tx.executeSql("INSERT INTO PERSONAS (NOMBRE, TIMESTAMP) VALUES (?, ?)", [p.nombre, p.timestamp]);
+	});
+};
+bdWebSQL.listarTodos = function(funcionCallback) {
+	this.bd.transaction(function(tx) {
+		tx.executeSql("SELECT * FROM PERSONAS ORDER BY NOMBRE", [], function(tx, resultado) {
+			var personas = [];
+			for (var i=0; i<resultado.rows.length; i++ ) {
+				var registro = resultado.rows.item(i);
+				var persona = new Persona();
+				persona.nombre = registro.NOMBRE;
+				persona.timestamp = registro.TIMESTAMP;
+				personas.push(persona);
+			}
+			funcionCallback(personas);
+
+		});
+	});
+};
+
+
+/* CREAMOS LOGICA PARA INDEXEDDB */
+window.indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB;
+
+var bdIDB = new BDManager();
+
+var baseIDB;
+bdIDB.tipo = "IndexedDB";
+bdIDB.init = function() {
+	var dbRequest = indexedDB.open("miBase");
+    dbRequest.onsuccess = function(event) {
+        // The database object appears as event.result
+        baseIDB = event.target.result;
+    }
+    dbRequest.onerror = function(event) {
+        // Manage error
+    }
+        
+    dbRequest.onupgradeneeded = function(event) {
+        var db = event.target.result;
+        // Let's create the object store for books
+        var objectStore = db.createObjectStore("personas", { keyPath:
+		"nombre" }); 
+	}
+
+ };
+bdIDB.guardarPersona = function(p) {
+ 	var transaction = baseIDB.transaction("personas", 'readwrite');
+    transaction.objectStore("personas").add({ nombre: p.nombre, timestamp: p.timestamp});
+};
+bdIDB.listarTodos = function(funcionCallback) {
+	if (baseIDB==undefined) return;
+
+	var todasPersonas = baseIDB.transaction("personas").objectStore("personas");
+	var personas = [];
+
+    todasPersonas.openCursor().onsuccess = function(event) {
+    	// Por cada persona
+	    var cursor = event.target.results;
+	    if (cursor) {
+	       var key = cursor.key;
+	       var registro = cursor.value;
+	       var persona = new Persona();
+	       persona.nombre = registro.nombre;
+	       persona.timestamp = registro.timestamp;
+	       personas.push(personas);
+
+	       cursor.continue(); // Move to next element and execute
+	                          // onsuccess again
+	    } else {
+	        funcionCallback(personas);
+
+		} 
+	};
+
+
+};
+
+
+var almacen;
+
+
+window.addEventListener("load", function(e) {
+	// Inicializamos base de datos
+	initBD();
+
+	// Le pedimos a la Base de Datos que liste
+	listarPersonas();
+
+	// Enlazamos click del botón
+	document.querySelector("input[type=button]").addEventListener("click", function(e) {
+		var nombre = document.querySelector("#text").value;
+		if (nombre.length>3) {
+			var p = new Persona();
+			p.nombre = nombre;
+			almacen.guardarPersona(p);
+			listarPersonas();
+		} else {
+			alert("Ingresa un nombre")
+		}
+	}, false);
+
+}, false);
+
+function initBD() {
+	// Verificar disponibilidad de WebSQL o IndexedDB
+	if (window.indexedDB) {
+		almacen = bdIDB;		
+	} else if (window.openDatabase) {
+		// WebSQL está
+		almacen = bdWebSQL;
+	} 
+	document.querySelector("output").innerHTML = "Usando " + almacen.tipo;
+	almacen.init();
+}
+
+function listarPersonas() {
+	document.querySelector("#elements").innerHTML = "";
+	almacen.listarTodos(function(lista) {
+		for (var i = 0; i < lista.length; i++) {
+			var persona = lista[i];
+			var li = "<li>" + persona.nombre + "</li>";
+			document.querySelector("#elements").innerHTML += li;
+		};
+	});
+}
+
+</script>
+
+<h1>Database</h1>
+<output></output>
+
+<section>
+	<label for="text">Nombre:</label>
+	<input id="text">
+	<input type="button" value="Guardar">
+</section>
+
+
+<ul id="elements">
+
+</ul>
