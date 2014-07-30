@@ -51,7 +51,7 @@ bdWebSQL.guardarPersona = function(p) {
 };
 bdWebSQL.listarTodos = function(funcionCallback) {
 	this.bd.transaction(function(tx) {
-		tx.executeSql("SELECT * FROM PERSONAS ORDER BY NOMBRE", [], function(tx, resultado) {
+		tx.executeSql("SELECT * FROhytM PERSONAS ORDER BY NOMBRE", [], function(tx, resultado) {
 			var personas = [];
 			for (var i=0; i<resultado.rows.length; i++ ) {
 				var registro = resultado.rows.item(i);
